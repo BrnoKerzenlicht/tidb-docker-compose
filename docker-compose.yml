@@ -15,49 +15,12 @@ services:
       - --peer-urls=http://0.0.0.0:2380
       - --advertise-client-urls=http://pd0:2379
       - --advertise-peer-urls=http://pd0:2380
-      - --initial-cluster=pd0=http://pd0:2380,pd1=http://pd1:2380,pd2=http://pd2:2380
+      - --initial-cluster=pd0=http://pd0:2380
       - --data-dir=/data/pd0
       - --config=/pd.toml
       - --log-file=/logs/pd0.log
     restart: on-failure
-  pd1:
-    image: pingcap/pd:latest
-    ports:
-      - "2379"
-    volumes:
-      - ./config/pd.toml:/pd.toml:ro
-      - ./data:/data
-      - ./logs:/logs
-    command:
-      - --name=pd1
-      - --client-urls=http://0.0.0.0:2379
-      - --peer-urls=http://0.0.0.0:2380
-      - --advertise-client-urls=http://pd1:2379
-      - --advertise-peer-urls=http://pd1:2380
-      - --initial-cluster=pd0=http://pd0:2380,pd1=http://pd1:2380,pd2=http://pd2:2380
-      - --data-dir=/data/pd1
-      - --config=/pd.toml
-      - --log-file=/logs/pd1.log
-    restart: on-failure
-  pd2:
-    image: pingcap/pd:latest
-    ports:
-      - "2379"
-    volumes:
-      - ./config/pd.toml:/pd.toml:ro
-      - ./data:/data
-      - ./logs:/logs
-    command:
-      - --name=pd2
-      - --client-urls=http://0.0.0.0:2379
-      - --peer-urls=http://0.0.0.0:2380
-      - --advertise-client-urls=http://pd2:2379
-      - --advertise-peer-urls=http://pd2:2380
-      - --initial-cluster=pd0=http://pd0:2380,pd1=http://pd1:2380,pd2=http://pd2:2380
-      - --data-dir=/data/pd2
-      - --config=/pd.toml
-      - --log-file=/logs/pd2.log
-    restart: on-failure
+
   tikv0:
     image: pingcap/tikv:latest
     volumes:
@@ -68,49 +31,11 @@ services:
       - --addr=0.0.0.0:20160
       - --advertise-addr=tikv0:20160
       - --data-dir=/data/tikv0
-      - --pd=pd0:2379,pd1:2379,pd2:2379
+      - --pd=pd0:2379
       - --config=/tikv.toml
       - --log-file=/logs/tikv0.log
     depends_on:
       - "pd0"
-      - "pd1"
-      - "pd2"
-    restart: on-failure
-  tikv1:
-    image: pingcap/tikv:latest
-    volumes:
-      - ./config/tikv.toml:/tikv.toml:ro
-      - ./data:/data
-      - ./logs:/logs
-    command:
-      - --addr=0.0.0.0:20160
-      - --advertise-addr=tikv1:20160
-      - --data-dir=/data/tikv1
-      - --pd=pd0:2379,pd1:2379,pd2:2379
-      - --config=/tikv.toml
-      - --log-file=/logs/tikv1.log
-    depends_on:
-      - "pd0"
-      - "pd1"
-      - "pd2"
-    restart: on-failure
-  tikv2:
-    image: pingcap/tikv:latest
-    volumes:
-      - ./config/tikv.toml:/tikv.toml:ro
-      - ./data:/data
-      - ./logs:/logs
-    command:
-      - --addr=0.0.0.0:20160
-      - --advertise-addr=tikv2:20160
-      - --data-dir=/data/tikv2
-      - --pd=pd0:2379,pd1:2379,pd2:2379
-      - --config=/tikv.toml
-      - --log-file=/logs/tikv2.log
-    depends_on:
-      - "pd0"
-      - "pd1"
-      - "pd2"
     restart: on-failure
 
   tidb:
@@ -123,44 +48,11 @@ services:
       - ./logs:/logs
     command:
       - --store=tikv
-      - --path=pd0:2379,pd1:2379,pd2:2379
+      - --path=pd0:2379
       - --config=/tidb.toml
       - --log-file=/logs/tidb.log
     depends_on:
       - "tikv0"
-      - "tikv1"
-      - "tikv2"
-    restart: on-failure
-  tispark-master:
-    image: pingcap/tispark:latest
-    command:
-      - /opt/spark/sbin/start-master.sh
-    volumes:
-      - ./config/spark-defaults.conf:/opt/spark/conf/spark-defaults.conf:ro
-    environment:
-      SPARK_MASTER_PORT: 7077
-      SPARK_MASTER_WEBUI_PORT: 8080
-    ports:
-      - "7077:7077"
-      - "8080:8080"
-    depends_on:
-      - "tikv0"
-      - "tikv1"
-      - "tikv2"
-    restart: on-failure
-  tispark-slave0:
-    image: pingcap/tispark:latest
-    command:
-      - /opt/spark/sbin/start-slave.sh
-      - spark://tispark-master:7077
-    volumes:
-      - ./config/spark-defaults.conf:/opt/spark/conf/spark-defaults.conf:ro
-    environment:
-      SPARK_WORKER_WEBUI_PORT: 38081
-    ports:
-      - "38081:38081"
-    depends_on:
-      - tispark-master
     restart: on-failure
 
   tidb-vision:
@@ -188,22 +80,23 @@ services:
       - "9090:9090"
     volumes:
       - ./config/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      - ./config/pd.rules.yml:/etc/prometheus/pd.rules.yml:ro
-      - ./config/tikv.rules.yml:/etc/prometheus/tikv.rules.yml:ro
-      - ./config/tidb.rules.yml:/etc/prometheus/tidb.rules.yml:ro
       - ./data:/data
+    restart: on-failure
+  mysql:
+    image: mysql:5.6
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+    ports:
+      - "3306:3306"
     restart: on-failure
   grafana:
     image: grafana/grafana:5.3.0
     environment:
-      GF_LOG_LEVEL: error
-      GF_PATHS_PROVISIONING: /etc/grafana/provisioning
-      GF_PATHS_CONFIG: /etc/grafana/grafana.ini
-    volumes:
-      - ./config/grafana:/etc/grafana
-      - ./config/dashboards:/var/lib/grafana/dashboards
+      GF_SECURITY_ADMIN_PASSWORD: secret
     ports:
       - "3000:3000"
+    depends_on:
+      - "mysql"
     restart: on-failure
   dashboard-installer:
     image: pingcap/tidb-dashboard-installer:v2.0.0
